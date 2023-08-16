@@ -1,5 +1,5 @@
 # FastKV
-A fast key value store library base on memory map files.
+A fast key value store library base on memory map files. You can use it in Unity.
 
 ## Usage
 ```
