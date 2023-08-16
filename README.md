@@ -10,4 +10,7 @@ fastKV = FastKV.Open("file_name", "xxxx");
 fastKV.SetInt("int_key");
 fastKV.GetInt("int_key");
 
+// after use you close it
+fastKV.Close();
+
 ```
