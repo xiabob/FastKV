@@ -185,6 +185,7 @@ namespace xiabob.FastKV
     {
         Normal = 0,
         Delete,
+        Null,
     }
 
     internal class Contents
@@ -227,7 +228,7 @@ namespace xiabob.FastKV
 
         public bool TryGetContentData(string key, out KeyValueBody data)
         {
-            return m_KeyValueCache.TryGetValue(key, out data) && data.Header.Flag == KeyValueFlag.Normal;
+            return m_KeyValueCache.TryGetValue(key, out data) && data.Header.Flag != KeyValueFlag.Delete;
         }
     }
 
@@ -766,8 +767,7 @@ namespace xiabob.FastKV
 
         public void SetString(string key, string value)
         {
-            if (value == null) return;
-            SetValue(key, Encoding.UTF8.GetBytes(value));
+            SetValue(key, value == null ? null : Encoding.UTF8.GetBytes(value));
         }
         public string GetString(string key, string defaultValue = null)
         {
@@ -776,10 +776,16 @@ namespace xiabob.FastKV
 
         public void SetBytes(string key, byte[] value)
         {
-            if (value == null) return;
-            byte[] input = new byte[value.Length];
-            Buffer.BlockCopy(value, 0, input, 0, value.Length);
-            SetValue(key, input);
+            if (value == null)
+            {
+                SetValue(key, null);
+            }
+            else
+            {
+                byte[] input = new byte[value.Length];
+                Buffer.BlockCopy(value, 0, input, 0, value.Length);
+                SetValue(key, input);
+            }
         }
         public byte[] GetBytes(string key, byte[] defaultValue = null)
         {
@@ -792,20 +798,39 @@ namespace xiabob.FastKV
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
 #endif
+            bool isNullValue = value == null;
+            value = value ?? Array.Empty<byte>();
             EncryptData(value);
-            bool didUpdateValue = SetValueInternal(key, value);
+            bool didUpdateValue = SetValueInternal(key, value, isNullValue);
 #if FAST_KV_PROFILE
             stopwatch.Stop();
             if (didUpdateValue) Debug.Log($"[FastKV] Set value time: {stopwatch.ElapsedTicks * 1f / TimeSpan.TicksPerMillisecond}");
 #endif
         }
 
-        private bool SetValueInternal(string key, byte[] value)
+        private bool SetValueInternal(string key, byte[] value, bool isNullValue)
         {
             if (m_Contents.TryGetContentData(key, out KeyValueBody keyValueBody))
             {
+                if (isNullValue)
+                {
+                    if (keyValueBody.Header.Flag != KeyValueFlag.Null)
+                    {
+                        keyValueBody.Header.UpdateAndWriteKeyValueFlag(m_HeadersViewAccessor, KeyValueFlag.Null);
+                        UpdateHeaderChecksumHash();
+                        
+                    }
+                    return false;
+                }
+
                 if (keyValueBody.ValueSize == value.Length)
                 {
+                    if (keyValueBody.Header.Flag != KeyValueFlag.Normal)
+                    {
+                        keyValueBody.Header.UpdateAndWriteKeyValueFlag(m_HeadersViewAccessor, KeyValueFlag.Normal);
+                        UpdateHeaderChecksumHash();
+                    }
+
                     if (keyValueBody.DidReadValue && value.Length <= 8 && value.IsSequenceEqual(keyValueBody.Value))
                     {
                         return false;
@@ -820,7 +845,7 @@ namespace xiabob.FastKV
             }
 
             var newKeyValueHeader = new KeyValueHeader();
-            newKeyValueHeader.Flag = KeyValueFlag.Normal;
+            newKeyValueHeader.Flag = isNullValue ? KeyValueFlag.Null : KeyValueFlag.Normal;
             newKeyValueHeader.KeySize = (byte)Encoding.UTF8.GetByteCount(key);
             newKeyValueHeader.Key = key;
             newKeyValueHeader.BodySize = value.Length + m_ValueHashAlgorithm.HashSize / 8;
@@ -879,6 +904,11 @@ namespace xiabob.FastKV
         {
             if (m_Contents.TryGetContentData(key, out KeyValueBody keyValueBody))
             {
+                if (keyValueBody.Header.Flag == KeyValueFlag.Null)
+                {
+                    return null;
+                }
+
                 if (!keyValueBody.DidReadValue)
                 {
                     keyValueBody.ReadValue(m_ContentsViewAccessor);

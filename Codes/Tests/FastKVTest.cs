@@ -195,6 +195,12 @@ public class FastKVTest
         m_TestFastKV.SetString("test_string", "test_string");
         Assert.AreEqual(m_TestFastKV.ContainsKey("test_string"), true);
 
+        m_TestFastKV.SetString("test_string", string.Empty);
+        Assert.AreEqual(m_TestFastKV.ContainsKey("test_string"), true);
+
+        m_TestFastKV.SetString("test_string", null);
+        Assert.AreEqual(m_TestFastKV.ContainsKey("test_string"), true);
+
         m_TestFastKV.SetDouble("test_double", 1.123456789100001);
         Assert.AreEqual(m_TestFastKV.ContainsKey("test_double"), true);
 
@@ -374,11 +380,28 @@ public class FastKVTest
     [TestCase("emoji😈😁🚩🧑‍💻🧑‍💼🦶🤱🚠🏄🥕🦆🇧🇾🇧🇲", ExpectedResult = "emoji😈😁🚩🧑‍💻🧑‍💼🦶🤱🚠🏄🥕🦆🇧🇾🇧🇲")]
     public string TestString(string value)
     {
+        m_TestFastKV.SetString("test_string", Random.Range(float.MinValue, float.MaxValue).ToString());
         m_TestFastKV.SetString("test_string", value);
         Assert.AreEqual(m_TestFastKV.GetString("test_string"), value);
 
+        m_TestFastKV.SetString("test_string_empty", "xx");
+        Assert.AreEqual(m_TestFastKV.GetString("test_string_empty"), "xx");
         m_TestFastKV.Close();
         SetUp();
+
+        m_TestFastKV.SetString("test_string_empty", null);
+        m_TestFastKV.Close();
+        SetUp();
+        Assert.AreEqual(m_TestFastKV.GetString("test_string_empty"), null);
+
+        m_TestFastKV.SetString("test_string_empty", string.Empty);
+        m_TestFastKV.Close();
+        SetUp();
+        Assert.AreEqual(m_TestFastKV.GetString("test_string_empty"), string.Empty);
+
+        m_TestFastKV.Close();
+        SetUp();
+        Assert.AreEqual(m_TestFastKV.GetString("test_string_empty"), string.Empty);
         return m_TestFastKV.GetString("test_string");
     }
 
@@ -507,9 +530,21 @@ public class FastKVTest
                 m_TestFastKV.SetLong($"test_valuetype_Long_{i}", longList[i]);
                 m_TestFastKV.SetDouble($"test_valuetype_Double_{i}", doubleList[i]);
 
-                for (int j = 0; j < 50; j++)
+                for (int j = 0; j < 100; j++)
                 {
-                    stringList[i] = Random.Range(int.MaxValue, float.MaxValue).ToString();
+                    stringList[i] = string.Empty;
+                    if (Random.value < 0.25f)
+                    {
+                        stringList[i] = null;
+                    }
+                    else if (Random.value < 0.5f)
+                    {
+                        stringList[i] = string.Empty;
+                    }
+                    else
+                    {
+                        stringList[i] = Random.Range(int.MinValue, float.MaxValue).ToString();
+                    }
                     m_TestFastKV.SetString($"test_valuetype_String_{i}", stringList[i]);
                     Assert.AreEqual(m_TestFastKV.GetString($"test_valuetype_String_{i}"), stringList[i]);
                 }
